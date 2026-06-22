@@ -159,6 +159,27 @@ func MRR(targetSet mapset.Set[int32], rankList []int32) float32 {
 	return 0
 }
 
+func AUC(targetSet mapset.Set[int32], rankList []int32) float32 {
+	if targetSet.Cardinality() == 0 || len(rankList) == 0 {
+		return 0
+	}
+	var posBeforeNeg float32
+	var posCount float32
+	var negCount float32
+	for _, itemId := range rankList {
+		if targetSet.Contains(itemId) {
+			posCount++
+		} else {
+			negCount++
+			posBeforeNeg += posCount
+		}
+	}
+	if posCount == 0 || negCount == 0 {
+		return 0
+	}
+	return posBeforeNeg / (posCount * negCount)
+}
+
 func Rank(model MatrixFactorization, userId int32, candidates []int32, topN int) []int32 {
 	// Get top-n list
 	itemsHeap := heap.NewTopKFilter[int32, float32](topN)

@@ -264,7 +264,7 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 			}
 			for _, item := range similarItems {
 				if !r.excludeSet.Contains(item.Id) {
-					scores[item.Id] += item.Score
+					scores[item.Id] += item.Score * r.config.DataSource.PositiveFeedbackWeight
 					categories[item.Id] = item.Categories
 					digests.Add(digest)
 				}
@@ -309,7 +309,7 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 			// add unseen items
 			for _, feedback := range feedbacks {
 				if !r.excludeSet.Contains(feedback.ItemId) {
-					scores[feedback.ItemId] += user.Score
+					scores[feedback.ItemId] += user.Score * r.config.DataSource.PositiveFeedbackWeight
 				}
 			}
 		}

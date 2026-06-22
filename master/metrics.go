@@ -19,9 +19,11 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"go.uber.org/zap"
 )
 
 const (
@@ -146,6 +148,21 @@ var (
 		Namespace: "gorse",
 		Subsystem: "master",
 		Name:      "ranking_search_precision",
+	})
+	OnlineAUC = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "online_auc",
+	})
+	OnlinePrecision = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "online_precision",
+	})
+	OnlineRecall = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "gorse",
+		Subsystem: "master",
+		Name:      "online_recall",
 	})
 
 	UsersTotal = promauto.NewGauge(prometheus.GaugeOpts{
@@ -306,4 +323,48 @@ func (evaluator *OnlineEvaluator) Evaluate() []cache.TimeSeriesPoint {
 		}
 	}
 	return points
+}
+
+type OnlineEvalResult struct {
+	AUC       float64
+	Precision float64
+	Recall    float64
+}
+
+func (evaluator *OnlineEvaluator) EvaluateMetrics() OnlineEvalResult {
+	var result OnlineEvalResult
+	var aucSum, precSum, recallSum float64
+	var userCount int
+	for userIndex, readItems := range evaluator.ReadFeedback[0] {
+		positiveItems, ok := evaluator.PositiveFeedback[""][userIndex]
+		if !ok || readItems.Cardinality() == 0 {
+			continue
+		}
+		hitCount := float64(readItems.Intersect(positiveItems).Cardinality())
+		if readItems.Cardinality() > 0 {
+			precSum += hitCount / float64(readItems.Cardinality())
+		}
+		if positiveItems.Cardinality() > 0 {
+			recallSum += hitCount / float64(positiveItems.Cardinality())
+		}
+		aucSum += hitCount / (float64(readItems.Cardinality()) + float64(positiveItems.Cardinality()) - hitCount + 1)
+		userCount++
+	}
+	if userCount > 0 {
+		result.AUC = aucSum / float64(userCount)
+		result.Precision = precSum / float64(userCount)
+		result.Recall = recallSum / float64(userCount)
+	}
+	return result
+}
+
+func (evaluator *OnlineEvaluator) EvaluateAndLog() {
+	result := evaluator.EvaluateMetrics()
+	OnlineAUC.Set(result.AUC)
+	OnlinePrecision.Set(result.Precision)
+	OnlineRecall.Set(result.Recall)
+	log.Logger().Info("online evaluation metrics",
+		zap.Float64("auc", result.AUC),
+		zap.Float64("precision", result.Precision),
+		zap.Float64("recall", result.Recall))
 }

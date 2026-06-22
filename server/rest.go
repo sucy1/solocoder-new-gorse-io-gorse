@@ -444,6 +444,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("category", "Category of returned items.").DataType("string")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Param(ws.QueryParameter("exclude", "Excluded item IDs (comma-separated)").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/collaborative-filtering/{user-id}/{category}").To(s.getCollaborativeFiltering).
@@ -455,6 +456,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Param(ws.QueryParameter("exclude", "Excluded item IDs (comma-separated)").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	// Get latest items
@@ -466,6 +468,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Param(ws.QueryParameter("exclude", "Excluded item IDs (comma-separated)").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/latest/{category}").To(s.getLatest).
@@ -476,6 +479,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Param(ws.QueryParameter("exclude", "Excluded item IDs (comma-separated)").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	// Get non-personalized
@@ -500,6 +504,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("category", "Category of returned items").DataType("string")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Param(ws.QueryParameter("exclude", "Excluded item IDs (comma-separated)").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	// Get user-to-user recommendation
@@ -523,6 +528,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("category", "Category of returned items").DataType("string")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Param(ws.QueryParameter("exclude", "Excluded item IDs (comma-separated)").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/item/{item-id}/neighbors/{category}").To(s.getItemNeighbors).
@@ -534,6 +540,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
+		Param(ws.QueryParameter("exclude", "Excluded item IDs (comma-separated)").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/user/{user-id}/neighbors/").To(s.getUserNeighbors).
@@ -556,6 +563,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Param(ws.QueryParameter("exclude", "Excluded item IDs (comma-separated)").DataType("string")).
 		Returns(http.StatusOK, "OK", []string{}).
 		Writes([]string{}))
 	ws.Route(ws.GET("/recommend/{user-id}/{category}").To(s.getRecommend).
@@ -569,6 +577,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Param(ws.QueryParameter("exclude", "Excluded item IDs (comma-separated)").DataType("string")).
 		Returns(http.StatusOK, "OK", []string{}).
 		Writes([]string{}))
 	ws.Route(ws.POST("/session/recommend").To(s.sessionRecommend).
@@ -646,6 +655,11 @@ func (s *RestServer) SearchDocuments(collection, subset string, categories []str
 			readItems.Add(f.ItemId)
 		}
 	}
+	for _, id := range strings.Split(request.QueryParameter("exclude"), ",") {
+		if id != "" {
+			readItems.Add(id)
+		}
+	}
 
 	end := offset + n
 	if end > 0 && readItems.Cardinality() > 0 {
@@ -660,7 +674,7 @@ func (s *RestServer) SearchDocuments(collection, subset string, categories []str
 	}
 
 	// Remove read items
-	if userId != "" {
+	if readItems.Cardinality() > 0 {
 		prunedItems := make([]cache.Score, 0, len(items))
 		for _, item := range items {
 			if !readItems.Contains(item.Id) {
@@ -717,6 +731,11 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 		}
 		for _, f := range feedback {
 			readItems.Add(f.ItemId)
+		}
+	}
+	for _, id := range strings.Split(request.QueryParameter("exclude"), ",") {
+		if id != "" {
+			readItems.Add(id)
 		}
 	}
 
@@ -893,6 +912,11 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	if err != nil {
 		InternalServerError(response, err)
 		return
+	}
+	for _, id := range strings.Split(request.QueryParameter("exclude"), ",") {
+		if id != "" {
+			recommender.ExcludeSet().Add(id)
+		}
 	}
 	scores, err := recommender.Recommend(ctx, n+offset)
 	if err != nil {

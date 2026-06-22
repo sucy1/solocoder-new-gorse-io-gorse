@@ -165,6 +165,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 
 	// evaluate positive feedback rate
 	points := evaluator.Evaluate()
+	evaluator.EvaluateAndLog()
 	if err = m.CacheClient.AddTimeSeriesPoints(ctx, points); err != nil {
 		log.Logger().Error("failed to insert measurement", zap.Error(err))
 	}

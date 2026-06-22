@@ -247,11 +247,13 @@ func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {
 }
 
 type DataSourceConfig struct {
-	PositiveFeedbackTypes []expression.FeedbackTypeExpression `mapstructure:"positive_feedback_types"`                // positive feedback type
-	NegativeFeedbackTypes []expression.FeedbackTypeExpression `mapstructure:"negative_feedback_types"`                // negative feedback type (highest priority)
-	ReadFeedbackTypes     []expression.FeedbackTypeExpression `mapstructure:"read_feedback_types"`                    // feedback type for read event
-	PositiveFeedbackTTL   uint                                `mapstructure:"positive_feedback_ttl" validate:"gte=0"` // time-to-live of positive feedbacks
-	ItemTTL               uint                                `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
+	PositiveFeedbackTypes   []expression.FeedbackTypeExpression `mapstructure:"positive_feedback_types"`                // positive feedback type
+	NegativeFeedbackTypes   []expression.FeedbackTypeExpression `mapstructure:"negative_feedback_types"`                // negative feedback type (highest priority)
+	ReadFeedbackTypes       []expression.FeedbackTypeExpression `mapstructure:"read_feedback_types"`                    // feedback type for read event
+	PositiveFeedbackTTL     uint                                `mapstructure:"positive_feedback_ttl" validate:"gte=0"` // time-to-live of positive feedbacks
+	ItemTTL                 uint                                `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
+	PositiveFeedbackWeight  float64                             `mapstructure:"positive_feedback_weight" validate:"gte=0"`
+	NegativeFeedbackWeight  float64                             `mapstructure:"negative_feedback_weight" validate:"gte=0"`
 }
 
 type SearchConfig struct {
@@ -277,10 +279,11 @@ func (config *NonPersonalizedConfig) Hash() string {
 }
 
 type ItemToItemConfig struct {
-	Name   string `mapstructure:"name" json:"name"`
-	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users chat auto"`
-	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
-	Prompt string `mapstructure:"prompt" json:"prompt"`
+	Name       string `mapstructure:"name" json:"name"`
+	Type       string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users chat auto"`
+	Column     string `mapstructure:"column" json:"column" validate:"item_expr"`
+	Prompt     string `mapstructure:"prompt" json:"prompt"`
+	Similarity string `mapstructure:"similarity" json:"similarity" validate:"omitempty,oneof=jaccard cosine"`
 }
 
 func (config *ItemToItemConfig) FullName() string {
@@ -292,6 +295,7 @@ func (config *ItemToItemConfig) Hash(cfg *RecommendConfig) string {
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Type))
 	hash.Write([]byte(config.Column))
+	hash.Write([]byte(config.Similarity))
 	if config.Type == "users" {
 		for _, expr := range cfg.DataSource.PositiveFeedbackTypes {
 			hash.Write([]byte(expr.String()))
@@ -498,6 +502,10 @@ func GetDefaultConfig() *Config {
 			CacheSize:   100,
 			CacheExpire: 72 * time.Hour,
 			ContextSize: 100,
+			DataSource: DataSourceConfig{
+				PositiveFeedbackWeight: 1.0,
+				NegativeFeedbackWeight: -1.0,
+			},
 			Collaborative: CollaborativeConfig{
 				Type:           "none",
 				FitPeriod:      60 * time.Minute,
@@ -636,6 +644,8 @@ func setDefault() {
 	viper.SetDefault("recommend.cache_size", defaultConfig.Recommend.CacheSize)
 	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
 	viper.SetDefault("recommend.context_size", defaultConfig.Recommend.ContextSize)
+	viper.SetDefault("recommend.data_source.positive_feedback_weight", defaultConfig.Recommend.DataSource.PositiveFeedbackWeight)
+	viper.SetDefault("recommend.data_source.negative_feedback_weight", defaultConfig.Recommend.DataSource.NegativeFeedbackWeight)
 	// [recommend.collaborative]
 	viper.SetDefault("recommend.collaborative.type", defaultConfig.Recommend.Collaborative.Type)
 	viper.SetDefault("recommend.collaborative.fit_period", defaultConfig.Recommend.Collaborative.FitPeriod)

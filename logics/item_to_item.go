@@ -222,6 +222,7 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 type tagsItemToItem struct {
 	baseItemToItem[[]dataset.ID]
 	IDF[dataset.ID]
+	similarityType string
 }
 
 func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
@@ -233,12 +234,23 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 		return nil, err
 	}
 	t := &tagsItemToItem{IDF: idf}
+	if cfg.Similarity == "" {
+		t.similarityType = "cosine"
+	} else {
+		t.similarityType = cfg.Similarity
+	}
+	var distanceFunc func([]dataset.ID, []dataset.ID) float32
+	if t.similarityType == "jaccard" {
+		distanceFunc = t.jaccardDistance
+	} else {
+		distanceFunc = t.distance
+	}
 	t.baseItemToItem = baseItemToItem[[]dataset.ID]{
 		name:       cfg.Name,
 		n:          n,
 		timestamp:  timestamp,
 		columnFunc: columnFunc,
-		index:      ann.NewHNSW(t.distance),
+		index:      ann.NewHNSW(distanceFunc),
 	}
 	return t, nil
 }
@@ -259,6 +271,30 @@ func (t *tagsItemToItem) Push(item *data.Item, _ []int32) {
 	v := tSet.ToSlice()
 	slices.Sort(v)
 	t.pushItem(item, v)
+}
+
+func (t *tagsItemToItem) jaccardDistance(a, b []dataset.ID) float32 {
+	if len(a) == 0 && len(b) == 0 {
+		return 1
+	}
+	commonCount := float32(0)
+	i, j := 0, 0
+	for i < len(a) && j < len(b) {
+		if a[i] == b[j] {
+			commonCount++
+			i++
+			j++
+		} else if a[i] < b[j] {
+			i++
+		} else {
+			j++
+		}
+	}
+	unionCount := float32(len(a)+len(b)) - commonCount
+	if unionCount == 0 {
+		return 1
+	}
+	return 1 - commonCount/unionCount
 }
 
 type usersItemToItem struct {
