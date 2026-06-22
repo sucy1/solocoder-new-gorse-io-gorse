@@ -293,7 +293,13 @@ func (evaluator *OnlineEvaluator) Add(feedbackType string, value float64, userIn
 
 func (evaluator *OnlineEvaluator) Evaluate() []cache.TimeSeriesPoint {
 	var points []cache.TimeSeriesPoint
-	totalUsers := len(evaluator.ReadFeedback[0])
+	totalFeedbackTypes := len(evaluator.PositiveFeedback)
+	totalWork := 0
+	for range evaluator.PositiveFeedback {
+		for i := 0; i < evaluator.WindowSize; i++ {
+			totalWork += len(evaluator.ReadFeedback[i])
+		}
+	}
 	processedUsers := 0
 	lastProgress := 0
 	for feedbackType := range evaluator.PositiveFeedback {
@@ -324,9 +330,11 @@ func (evaluator *OnlineEvaluator) Evaluate() []cache.TimeSeriesPoint {
 				})
 			}
 			processedUsers += len(evaluator.ReadFeedback[i])
-			if totalUsers > 10000 && processedUsers-lastProgress >= 10000 {
+			if totalWork > 10000 && processedUsers-lastProgress >= 10000 {
 				log.Logger().Info("online evaluation progress",
-					zap.Int("processed_users", processedUsers),
+					zap.Int("processed", processedUsers),
+					zap.Int("total", totalWork),
+					zap.Int("feedback_types", totalFeedbackTypes),
 					zap.Int("window_index", i))
 				lastProgress = processedUsers
 			}

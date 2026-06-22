@@ -163,16 +163,16 @@ type RecommendConfig struct {
 	CacheExpire     time.Duration           `mapstructure:"cache_expire" validate:"gt=0"`
 	ContextSize     int                     `mapstructure:"context_size" validate:"gt=0"`
 	ActiveUserTTL   int                     `mapstructure:"active_user_ttl" validate:"gte=0"`
-	DataSource      DataSourceConfig        `mapstructure:"data_source"`
-	Search          SearchConfig            `mapstructure:"search"`
+	DataSource      DataSourceConfig        `mapstructure:"data_source" validate:"dive"`
+	Search          SearchConfig            `mapstructure:"search" validate:"dive"`
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
 	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item" validate:"dive"`
 	UserToUser      []UserToUserConfig      `mapstructure:"user-to-user" validate:"dive"`
-	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
+	Collaborative   CollaborativeConfig     `mapstructure:"collaborative" validate:"dive"`
 	External        []ExternalConfig        `mapstructure:"external" validate:"dive"`
-	Replacement     ReplacementConfig       `mapstructure:"replacement"`
-	Ranker          RankerConfig            `mapstructure:"ranker"`
-	Fallback        FallbackConfig          `mapstructure:"fallback"`
+	Replacement     ReplacementConfig       `mapstructure:"replacement" validate:"dive"`
+	Ranker          RankerConfig            `mapstructure:"ranker" validate:"dive"`
+	Fallback        FallbackConfig          `mapstructure:"fallback" validate:"dive"`
 }
 
 func (r *RecommendConfig) ListRecommenders() []string {

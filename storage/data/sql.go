@@ -912,19 +912,11 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string, opts 
 		if opts.After != nil {
 			query = query.Where("time_stamp > ?", *opts.After)
 		}
-		result, err := query.Rows()
-		if err != nil {
+		var batchItems []Item
+		if err := query.Scan(&batchItems).Error; err != nil {
 			return nil, errors.Trace(err)
 		}
-		for result.Next() {
-			var item Item
-			if err = d.gormDB.ScanRows(result, &item); err != nil {
-				result.Close()
-				return nil, errors.Trace(err)
-			}
-			items = append(items, item)
-		}
-		result.Close()
+		items = append(items, batchItems...)
 	}
 	return items, nil
 }
