@@ -655,15 +655,26 @@ func (s *RestServer) SearchDocuments(collection, subset string, categories []str
 			readItems.Add(f.ItemId)
 		}
 	}
-	for _, id := range strings.Split(request.QueryParameter("exclude"), ",") {
-		if id != "" {
-			readItems.Add(id)
+	excludeParam := request.QueryParameter("exclude")
+	if excludeParam != "" {
+		excludeIds := strings.Split(excludeParam, ",")
+		if len(excludeIds) > 1000 {
+			BadRequest(response, errors.New("exclude parameter contains too many IDs, maximum 1000"))
+			return
+		}
+		for _, id := range excludeIds {
+			if id != "" {
+				readItems.Add(id)
+			}
 		}
 	}
 
 	end := offset + n
 	if end > 0 && readItems.Cardinality() > 0 {
 		end += readItems.Cardinality()
+	}
+	if end > s.Config.Database.Redis.MaxSearchResults {
+		end = s.Config.Database.Redis.MaxSearchResults
 	}
 
 	// Get the sorted list
@@ -733,15 +744,26 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 			readItems.Add(f.ItemId)
 		}
 	}
-	for _, id := range strings.Split(request.QueryParameter("exclude"), ",") {
-		if id != "" {
-			readItems.Add(id)
+	excludeParam := request.QueryParameter("exclude")
+	if excludeParam != "" {
+		excludeIds := strings.Split(excludeParam, ",")
+		if len(excludeIds) > 1000 {
+			BadRequest(response, errors.New("exclude parameter contains too many IDs, maximum 1000"))
+			return
+		}
+		for _, id := range excludeIds {
+			if id != "" {
+				readItems.Add(id)
+			}
 		}
 	}
 
 	limit := offset + n
 	if readItems.Cardinality() > 0 {
 		limit += readItems.Cardinality()
+	}
+	if limit > s.Config.Database.Redis.MaxSearchResults {
+		limit = s.Config.Database.Redis.MaxSearchResults
 	}
 
 	var after *time.Time
@@ -913,9 +935,17 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		InternalServerError(response, err)
 		return
 	}
-	for _, id := range strings.Split(request.QueryParameter("exclude"), ",") {
-		if id != "" {
-			recommender.ExcludeSet().Add(id)
+	excludeParam := request.QueryParameter("exclude")
+	if excludeParam != "" {
+		excludeIds := strings.Split(excludeParam, ",")
+		if len(excludeIds) > 1000 {
+			BadRequest(response, errors.New("exclude parameter contains too many IDs, maximum 1000"))
+			return
+		}
+		for _, id := range excludeIds {
+			if id != "" {
+				recommender.ExcludeSet().Add(id)
+			}
 		}
 	}
 	scores, err := recommender.Recommend(ctx, n+offset)

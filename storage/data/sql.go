@@ -880,48 +880,51 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string, opts 
 	} else {
 		selectFields = "item_id, is_hidden, categories, time_stamp, labels, comment"
 	}
-	query := d.gormDB.WithContext(ctx).
-		Table(d.ItemsTable()).
-		Select(selectFields).
-		Where("item_id IN ?", itemIds)
-	// Add category filter if specified (using JSON functions for portability)
-	if len(opts.Categories) > 0 {
-		q, err := jsonutil.Marshal(opts.Categories)
+	batchSize := 100
+	var items []Item
+	for i := 0; i < len(itemIds); i += batchSize {
+		end := i + batchSize
+		if end > len(itemIds) {
+			end = len(itemIds)
+		}
+		batchIds := itemIds[i:end]
+		query := d.gormDB.WithContext(ctx).
+			Table(d.ItemsTable()).
+			Select(selectFields).
+			Where("item_id IN ?", batchIds)
+		if len(opts.Categories) > 0 {
+			q, err := jsonutil.Marshal(opts.Categories)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			switch d.driver {
+			case Postgres:
+				query = query.Where("categories::jsonb @> ?::jsonb", string(q))
+			case MySQL, SQLite:
+				query = query.Where("JSON_CONTAINS(categories,?)", string(q))
+			case ClickHouse:
+				query = query.Where("hasAll(JSONExtractArrayRaw(categories),JSONExtractArrayRaw(?))", string(q))
+			}
+		}
+		if opts.SkipHidden {
+			query = query.Where("is_hidden = ?", false)
+		}
+		if opts.After != nil {
+			query = query.Where("time_stamp > ?", *opts.After)
+		}
+		result, err := query.Rows()
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		switch d.driver {
-		case Postgres:
-			// PostgreSQL: use jsonb @> for array containment
-			query = query.Where("categories::jsonb @> ?::jsonb", string(q))
-		case MySQL, SQLite:
-			// MySQL/SQLite: use JSON_CONTAINS (checks if all categories are present)
-			query = query.Where("JSON_CONTAINS(categories,?)", string(q))
-		case ClickHouse:
-			// ClickHouse: use hasAll for array containment
-			query = query.Where("hasAll(JSONExtractArrayRaw(categories),JSONExtractArrayRaw(?))", string(q))
+		for result.Next() {
+			var item Item
+			if err = d.gormDB.ScanRows(result, &item); err != nil {
+				result.Close()
+				return nil, errors.Trace(err)
+			}
+			items = append(items, item)
 		}
-	}
-	// Add hidden filter if specified
-	if opts.SkipHidden {
-		query = query.Where("is_hidden = ?", false)
-	}
-	// Add time filter if specified
-	if opts.After != nil {
-		query = query.Where("time_stamp > ?", *opts.After)
-	}
-	result, err := query.Rows()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	defer result.Close()
-	var items []Item
-	for result.Next() {
-		var item Item
-		if err = d.gormDB.ScanRows(result, &item); err != nil {
-			return nil, errors.Trace(err)
-		}
-		items = append(items, item)
+		result.Close()
 	}
 	return items, nil
 }

@@ -252,8 +252,8 @@ type DataSourceConfig struct {
 	ReadFeedbackTypes       []expression.FeedbackTypeExpression `mapstructure:"read_feedback_types"`                    // feedback type for read event
 	PositiveFeedbackTTL     uint                                `mapstructure:"positive_feedback_ttl" validate:"gte=0"` // time-to-live of positive feedbacks
 	ItemTTL                 uint                                `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
-	PositiveFeedbackWeight  float64                             `mapstructure:"positive_feedback_weight" validate:"gte=0"`
-	NegativeFeedbackWeight  float64                             `mapstructure:"negative_feedback_weight" validate:"gte=0"`
+	PositiveFeedbackWeight  float64                             `mapstructure:"positive_feedback_weight" validate:"gte=0,lte=100"`
+	NegativeFeedbackWeight  float64                             `mapstructure:"negative_feedback_weight" validate:"gte=-100,lte=100"`
 }
 
 type SearchConfig struct {

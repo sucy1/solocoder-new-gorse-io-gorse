@@ -362,16 +362,18 @@ type IDF[T dataset.ID | int32] []float32
 func (idf IDF[T]) distance(a, b []T) float32 {
 	commonSum, commonCount := idf.weightedSumCommonElements(a, b)
 	if len(a) == len(b) && commonCount == float32(len(a)) {
-		// If two items have the same tags, its distance is zero.
 		return 0
 	} else if commonCount > 0 && len(a) > 0 && len(b) > 0 {
-		// Add shrinkage to avoid division by zero
+		sumA := idf.weightedSum(a)
+		sumB := idf.weightedSum(b)
+		if sumA <= 0 || sumB <= 0 {
+			return 1
+		}
 		return 1 - commonSum*commonCount/
-			math32.Sqrt(idf.weightedSum(a))/
-			math32.Sqrt(idf.weightedSum(b))/
+			math32.Sqrt(sumA)/
+			math32.Sqrt(sumB)/
 			(commonCount+100)
 	} else {
-		// If two items have no common tags, its distance is one.
 		return 1
 	}
 }

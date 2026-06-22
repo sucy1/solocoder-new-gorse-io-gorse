@@ -293,6 +293,9 @@ func (evaluator *OnlineEvaluator) Add(feedbackType string, value float64, userIn
 
 func (evaluator *OnlineEvaluator) Evaluate() []cache.TimeSeriesPoint {
 	var points []cache.TimeSeriesPoint
+	totalUsers := len(evaluator.ReadFeedback[0])
+	processedUsers := 0
+	lastProgress := 0
 	for feedbackType := range evaluator.PositiveFeedback {
 		for i := 0; i < evaluator.WindowSize; i++ {
 			date := evaluator.WindowEnd.AddDate(0, 0, -i)
@@ -320,6 +323,13 @@ func (evaluator *OnlineEvaluator) Evaluate() []cache.TimeSeriesPoint {
 					Value:     ratioSum / float64(userCount),
 				})
 			}
+			processedUsers += len(evaluator.ReadFeedback[i])
+			if totalUsers > 10000 && processedUsers-lastProgress >= 10000 {
+				log.Logger().Info("online evaluation progress",
+					zap.Int("processed_users", processedUsers),
+					zap.Int("window_index", i))
+				lastProgress = processedUsers
+			}
 		}
 	}
 	return points
@@ -335,20 +345,35 @@ func (evaluator *OnlineEvaluator) EvaluateMetrics() OnlineEvalResult {
 	var result OnlineEvalResult
 	var aucSum, precSum, recallSum float64
 	var userCount int
+	totalUsers := len(evaluator.ReadFeedback[0])
+	processedUsers := 0
+	lastProgress := 0
 	for userIndex, readItems := range evaluator.ReadFeedback[0] {
 		positiveItems, ok := evaluator.PositiveFeedback[""][userIndex]
 		if !ok || readItems.Cardinality() == 0 {
 			continue
 		}
 		hitCount := float64(readItems.Intersect(positiveItems).Cardinality())
-		if readItems.Cardinality() > 0 {
-			precSum += hitCount / float64(readItems.Cardinality())
+		readCount := float64(readItems.Cardinality())
+		positiveCount := float64(positiveItems.Cardinality())
+		if readCount > 0 {
+			precSum += hitCount / readCount
 		}
-		if positiveItems.Cardinality() > 0 {
-			recallSum += hitCount / float64(positiveItems.Cardinality())
+		if positiveCount > 0 {
+			recallSum += hitCount / positiveCount
 		}
-		aucSum += hitCount / (float64(readItems.Cardinality()) + float64(positiveItems.Cardinality()) - hitCount + 1)
+		denominator := readCount + positiveCount - hitCount + 1
+		if denominator > 0 {
+			aucSum += hitCount / denominator
+		}
 		userCount++
+		processedUsers++
+		if totalUsers > 10000 && processedUsers-lastProgress >= 10000 {
+			log.Logger().Info("online metrics evaluation progress",
+				zap.Int("processed_users", processedUsers),
+				zap.Int("total_users", totalUsers))
+			lastProgress = processedUsers
+		}
 	}
 	if userCount > 0 {
 		result.AUC = aucSum / float64(userCount)
